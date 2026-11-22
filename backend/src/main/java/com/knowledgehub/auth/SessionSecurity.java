@@ -20,6 +20,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -67,8 +68,22 @@ class SessionSecurity {
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) -> unauthorized(json, response))
-                        .accessDeniedHandler((request, response, exception) -> write(json, response, 403,
-                                new ApiError("FORBIDDEN", "请求无权限或校验令牌无效"))))
+                        .accessDeniedHandler((request, response, exception) -> {
+                            if (!(exception instanceof CsrfException)) {
+                                write(json, response, 403, new ApiError("FORBIDDEN", "请求无权限"));
+                                return;
+                            }
+                            var auth = SecurityContextHolder.getContext().getAuthentication();
+                            String path = request.getRequestURI().substring(request.getContextPath().length());
+                            boolean publicWrite = request.getMethod().equals("POST")
+                                    && (path.equals("/api/auth/login") || path.equals("/api/auth/register"));
+                            if (!publicWrite && (auth == null || !(auth.getPrincipal() instanceof CurrentAccount))) {
+                                unauthorized(json, response);
+                                return;
+                            }
+                            write(json, response, 403,
+                                    new ApiError("CSRF_INVALID", "会话校验令牌已失效，请重新提交"));
+                        }))
                 .addFilterBefore(new SessionVersionFilter(accounts, json), CsrfFilter.class)
                 .build();
     }

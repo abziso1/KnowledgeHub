@@ -3,12 +3,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { api, ApiError, errorText } from '../api/client'
 import type { ImageView, NoteView } from '../api/contracts'
-import { activeViewer } from '../auth/session'
 import { libraryPath } from '../router'
 import MarkdownPreview from './MarkdownPreview.vue'
 import { useNoteDraft } from './useNoteDraft'
 
-const props = defineProps<{ libraryId: string; noteId: string }>()
+const props = defineProps<{ libraryId: string; noteId: string; leavingAfterLogout?: boolean }>()
+const emit = defineEmits<{ dirtyChange: [dirty: boolean] }>()
 const draft = shallowRef<ReturnType<typeof useNoteDraft>>()
 const error = ref('')
 const notice = ref('')
@@ -36,11 +36,13 @@ watch(path, async (target, _before, onCleanup) => {
   }
 }, { immediate: true })
 
+watch(() => draft.value?.dirty.value ?? false, dirty => emit('dirtyChange', dirty), { immediate: true })
+
 function allowNavigation() {
   return !draft.value?.dirty.value || window.confirm('有未保存修改。确定离开笔记？')
 }
 
-onBeforeRouteLeave(to => to.name === 'login' && !activeViewer.value || allowNavigation())
+onBeforeRouteLeave(to => (to.name === 'login' && props.leavingAfterLogout) || allowNavigation())
 onBeforeRouteUpdate((to, from) => to.params.noteId === from.params.noteId
   && to.params.libraryId === from.params.libraryId || allowNavigation())
 

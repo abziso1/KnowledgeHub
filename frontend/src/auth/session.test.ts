@@ -42,6 +42,21 @@ describe('same-origin sessions', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('refreshes a rejected CSRF token only on the next explicit submit', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'expired' }))
+      .mockResolvedValueOnce(response({ code: 'CSRF_INVALID' }, 403))
+      .mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'fresh' }))
+      .mockResolvedValueOnce(response({ id: 'note' }))
+    vi.stubGlobal('fetch', fetch)
+    const { api } = await import('../api/client')
+    const submit = () => api('/api/libraries/library/notes/note', { method: 'PUT' })
+    await expect(submit()).rejects.toMatchObject({ code: 'CSRF_INVALID' })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    await expect(submit()).resolves.toEqual({ id: 'note' })
+    expect(new Headers(fetch.mock.calls[3][1].headers).get('X-CSRF-TOKEN')).toBe('fresh')
+  })
+
   it('authenticates a FormData write without setting its content boundary', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'token' }))

@@ -238,12 +238,20 @@ function refreshFolderTree() {
   if (libraryId.value) void reloadFolders(libraryId.value)
 }
 
+const noteDirty = ref(false)
+const leavingAfterLogout = ref(false)
+
 async function signOut() {
+  if (leavingAfterLogout.value) return
+  if (route.name === 'note' && noteDirty.value && !window.confirm('有未保存修改。确定退出登录？')) return
+  leavingAfterLogout.value = true
   try {
     await logout()
     await router.replace('/login')
   } catch (failure) {
     error.value = errorText(failure)
+  } finally {
+    leavingAfterLogout.value = false
   }
 }
 </script>
@@ -294,6 +302,8 @@ async function signOut() {
         <RouterView v-slot="{ Component }">
           <component :is="Component" v-if="listingNotes" :folders="folders" />
           <component :is="Component" v-else-if="route.name === 'content-trash'" @changed="refreshFolderTree" />
+          <component :is="Component" v-else-if="route.name === 'note'" :leaving-after-logout="leavingAfterLogout"
+                     @dirty-change="noteDirty = $event" />
           <component :is="Component" v-else />
         </RouterView>
       </template>

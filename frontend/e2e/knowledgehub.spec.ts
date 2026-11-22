@@ -89,6 +89,15 @@ test('two owners, Markdown, image, two trash scopes and account suspension', asy
     await page.getByRole('link', { name: '搜索笔记' }).click()
     await expect(page).toHaveURL(new RegExp(notePage + '$'))
     await expect(source).toHaveValue(/这段尚未保存/)
+    let logoutPrompt = false
+    page.once('dialog', async dialog => {
+      logoutPrompt = true
+      await dialog.dismiss()
+    })
+    await page.getByRole('button', { name: '退出登录' }).click()
+    await expect.poll(() => logoutPrompt).toBe(true)
+    expect((await page.request.get('/api/auth/me')).status()).toBe(200)
+    await expect(source).toHaveValue(/这段尚未保存/)
     await source.fill(savedSource)
     await page.getByRole('link', { name: '搜索笔记' }).click()
     await page.getByLabel('搜索关键词').fill('事务隔离')

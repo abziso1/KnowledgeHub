@@ -32,12 +32,14 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   }
 }
 
-async function check(response: Response, version: number) {
+async function check(response: Response, version: number, usedToken?: Promise<CsrfToken>) {
   if (response.ok) return
   const body = await response.json().catch(() => ({}))
   if (response.status === 401 && sessionVersion === version) {
     resetCsrfToken()
     unauthorized.forEach(listener => listener())
+  } else if (response.status === 403 && body?.code === 'CSRF_INVALID' && usedToken === csrfRequest) {
+    csrfRequest = undefined
   }
   throw new ApiError(response.status, body?.code || 'REQUEST_FAILED',
     body?.message || `请求失败（${response.status}）`)
@@ -65,12 +67,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (typeof init.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
+  let usedToken: Promise<CsrfToken> | undefined
   if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-    const token = await csrf()
+    usedToken = csrf()
+    const token = await usedToken
     headers.set(token.headerName, token.token)
   }
   const response = await send(path, { ...init, method, headers })
-  await check(response, version)
+  await check(response, version, usedToken)
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 

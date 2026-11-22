@@ -47,7 +47,9 @@ class AccountAccessTest extends ApiTestSupport {
         }
         mvc.perform(MockMvcRequestBuilders.put("/api/admin/users/" + user.accountId() + "/status")
                         .session(admin.session()).contentType("application/json").content("{\"enabled\":false}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.code").value("CSRF_INVALID"));
     }
 
     @Test

@@ -143,3 +143,4 @@ npm --prefix frontend run test:e2e -- persistence.spec.ts
 - `npm --prefix frontend run test:e2e -- knowledgehub.spec.ts` 通过。覆盖双用户隔离、Markdown 图片和搜索、内容与整库恢复、管理员停用和旧会话失效。
 - `npm --prefix frontend run test:e2e -- persistence.spec.ts` 的 `seed` 与重启后的 `verify` 通过。按上面的备份命令导出同批 PostgreSQL、Tracker 和 Storage 数据，恢复到 `knowledgehub-restore` 的独立数据卷和端口 `18081` 后，`verify` 再次通过。验证使用原账号、原笔记正文和同一图片 SHA-256，原实例的三个卷仍可用。
 - 在恢复实例临时启用 HTTPS，`GET /api/auth/csrf` 返回带 `Secure`、`HttpOnly` 和 `SameSite=Lax` 的会话 Cookie。测试结束后恢复 HTTP 配置。
+- 收尾复测通过后端 22 项、前端 12 项及 Chromium 全流程测试。取消退出登录会保留原会话与未保存草稿。CSRF 令牌失效后，下次手动提交会获取新令牌。
