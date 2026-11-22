@@ -1,0 +1,59 @@
+name: knowledgehub-fastdfs-test
+services:
+  tracker:
+    build: ./ops/fastdfs
+    image: knowledgehub-fastdfs:6.15.5
+    command: tracker
+    networks: [fastdfs]
+    volumes:
+      - tracker-data:/data/tracker
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22122"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  storage:
+    image: knowledgehub-fastdfs:6.15.5
+    command: storage
+    networks: [fastdfs]
+    depends_on:
+      tracker:
+        condition: service_healthy
+    volumes:
+      - storage-data:/data/storage
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - printf 'base_path = /tmp\ntracker_server = tracker:22122\n' > /tmp/probe.conf && fdfs_monitor /tmp/probe.conf | grep -q 'ACTIVE'
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  fastdfs-test:
+    image: maven:3.9.12-eclipse-temurin-21
+    environment:
+      KH_FDFS_TRACKER: tracker:22122
+    working_dir: /workspace
+    networks: [default, fastdfs]
+    depends_on:
+      storage:
+        condition: service_healthy
+    volumes:
+      - ./backend:/source:ro
+      - ./ops/fastdfs:/fastdfs:ro
+      - maven-cache:/root/.m2
+    command:
+      - sh
+      - -ec
+      - |
+        mkdir -p backend
+        cp /source/pom.xml backend/
+        cp -R /source/src backend/
+        bash /fastdfs/install-java-sdk.sh
+        mvn -B -ntp -f backend/pom.xml -Pfastdfs-it -Dit.test=FastDfsRoundTripIT verify
+networks:
+  fastdfs:
+    internal: true
+volumes:
+  maven-cache:
+  tracker-data:
+  storage-data:

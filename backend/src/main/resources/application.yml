@@ -11,3 +11,6 @@ management:
   endpoint:
     health:
       show-details: never
+knowledgehub:
+  fastdfs:
+    tracker: ${KH_FDFS_TRACKER:tracker:22122}
