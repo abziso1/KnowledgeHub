@@ -1,8 +1,17 @@
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${KH_DB_URL:jdbc:postgresql://localhost:5432/knowledgehub}
     username: ${KH_DB_USERNAME:knowledgehub}
     password: ${KH_DB_PASSWORD:}
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${KH_SESSION_SECURE:false}
 management:
   endpoints:
     web:
@@ -14,3 +23,9 @@ management:
 knowledgehub:
   fastdfs:
     tracker: ${KH_FDFS_TRACKER:tracker:22122}
+  admin:
+    username: ${KH_ADMIN_USERNAME:}
+    password: ${KH_ADMIN_PASSWORD:}
+  auth:
+    registration-limit: ${KH_REGISTRATION_LIMIT:10}
+    login-limit: ${KH_LOGIN_LIMIT:5}
