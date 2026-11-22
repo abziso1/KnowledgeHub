@@ -24,6 +24,7 @@ const folderId = computed(() => typeof route.params.folderId === 'string' ? rout
 const library = computed(() => libraries.value.find(item => item.id === libraryId.value))
 const folder = computed(() => folders.value.find(item => item.id === folderId.value))
 const libraryTrash = computed(() => route.name === 'library-trash')
+const listingNotes = computed(() => route.name === 'library' || route.name === 'folder')
 const libraryApi = (id: string) => '/api/libraries/' + encodeURIComponent(id)
 
 const moveTargets = computed(() => {
@@ -191,6 +192,52 @@ async function moveFolder() {
   }
 }
 
+async function trashCurrentLibrary() {
+  const current = library.value
+  if (!current) return
+  try {
+    await ElMessageBox.confirm(`将「${current.name}」移入知识库回收站？库内笔记和图片可以随知识库恢复。`,
+      '移入知识库回收站', { confirmButtonText: '移入回收站', cancelButtonText: '取消', type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await api(libraryApi(current.id), { method: 'DELETE' })
+    libraries.value = libraries.value.filter(item => item.id !== current.id)
+    if (matchesLibrary(current.id, libraryId.value) && activeViewer.value) {
+      await router.replace(resolveHome(activeViewer.value, libraries.value))
+    }
+    await reloadLibraries()
+  } catch (failure) {
+    error.value = errorText(failure)
+  }
+}
+
+async function trashCurrentFolder() {
+  const id = libraryId.value
+  const current = folder.value
+  if (!id || !current) return
+  try {
+    await ElMessageBox.confirm(`将「${current.name}」及其中的内容移入内容回收站？`,
+      '移入内容回收站', { confirmButtonText: '移入回收站', cancelButtonText: '取消', type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await api(libraryApi(id) + '/folders/' + current.id, { method: 'DELETE' })
+    if (matchesLibrary(id, libraryId.value)) {
+      if (folderId.value === current.id) await router.replace(libraryPath(id, current.parentId ?? undefined))
+      await reloadFolders(id)
+    }
+  } catch (failure) {
+    if (matchesLibrary(id, libraryId.value)) error.value = errorText(failure)
+  }
+}
+
+function refreshFolderTree() {
+  if (libraryId.value) void reloadFolders(libraryId.value)
+}
+
 async function signOut() {
   try {
     await logout()
@@ -214,31 +261,41 @@ async function signOut() {
       <LibrarySwitcher :libraries="libraries" :selected-id="libraryId" @select="selectLibrary" @create="createLibrary" />
       <FolderTree v-if="library" :folders="folders" :selected-id="folderId" :loading="loadingFolders"
                   @select="selectFolder" />
-      <nav class="rail-footer">
+      <nav class="rail-footer" aria-label="知识库工具">
+        <template v-if="library">
+          <RouterLink :to="libraryPath(library.id) + '/search'">搜索笔记</RouterLink>
+          <RouterLink :to="libraryPath(library.id) + '/content-trash'">内容回收站</RouterLink>
+        </template>
         <RouterLink to="/library-trash">知识库回收站</RouterLink>
       </nav>
     </aside>
     <main class="workspace-main">
       <el-alert v-if="error" type="error" :closable="false" :title="error" />
-      <template v-if="libraryTrash">
-        <h1>知识库回收站</h1>
-      </template>
+      <RouterView v-if="libraryTrash" v-slot="{ Component }">
+        <component :is="Component" @changed="reloadLibraries" />
+      </RouterView>
       <template v-else-if="library">
         <nav class="breadcrumbs" aria-label="当前位置">
           <RouterLink :to="libraryPath(library.id)">{{ library.name }}</RouterLink>
           <span v-if="folder" aria-hidden="true">/</span>
           <span v-if="folder">{{ folder.name }}</span>
         </nav>
-        <header class="pane-header">
+        <header v-if="listingNotes" class="pane-header">
           <h1>{{ folder?.name ?? library.name }}</h1>
           <div class="actions">
             <el-button @click="createFolder">新建文件夹</el-button>
             <el-button v-if="folder" @click="renameFolder">重命名文件夹</el-button>
             <el-button v-if="folder" @click="startMove">移动文件夹</el-button>
-            <el-button v-else @click="renameLibrary">重命名知识库</el-button>
+            <el-button v-if="folder" type="danger" plain @click="trashCurrentFolder">回收文件夹</el-button>
+            <el-button v-if="!folder" @click="renameLibrary">重命名知识库</el-button>
+            <el-button v-if="!folder" type="danger" plain @click="trashCurrentLibrary">回收知识库</el-button>
           </div>
         </header>
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <component :is="Component" v-if="listingNotes" :folders="folders" />
+          <component :is="Component" v-else-if="route.name === 'content-trash'" @changed="refreshFolderTree" />
+          <component :is="Component" v-else />
+        </RouterView>
       </template>
       <p v-else-if="loadingLibraries" role="status" class="muted">正在加载知识库</p>
       <div v-else class="empty-state">

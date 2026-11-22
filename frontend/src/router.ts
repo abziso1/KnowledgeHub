@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteLocationNormalized } from 'vue-router'
 import { onUnauthorized } from './api/client'
 import { getViewer } from './auth/session'
 import type { LibraryView, Role, Viewer } from './api/contracts'
@@ -37,6 +38,11 @@ declare module 'vue-router' {
 export function makeRouter() {
   const emptyPane = defineComponent({ render: () => null })
   const auth = () => import('./auth/AuthView.vue')
+  const notes = () => import('./editor/NoteList.vue')
+  const trash = () => import('./trash/TrashView.vue')
+  const noteListProps = (route: RouteLocationNormalized) => ({
+    libraryId: route.params.libraryId, folderId: route.params.folderId || null,
+  })
   const router = createRouter({
     history: createWebHistory(),
     routes: [
@@ -51,9 +57,15 @@ export function makeRouter() {
         children: [
           { path: '', redirect: '/app' },
           { path: '/app', name: 'workspace-home', component: emptyPane },
-          { path: '/kb/:libraryId', name: 'library', component: emptyPane },
-          { path: '/kb/:libraryId/folders/:folderId', name: 'folder', component: emptyPane },
-          { path: '/library-trash', name: 'library-trash', component: emptyPane },
+          { path: '/kb/:libraryId', name: 'library', component: notes, props: noteListProps },
+          { path: '/kb/:libraryId/folders/:folderId', name: 'folder', component: notes, props: noteListProps },
+          { path: '/kb/:libraryId/notes/:noteId', name: 'note', component: () => import('./editor/NoteEditorView.vue'),
+            props: true },
+          { path: '/kb/:libraryId/search', name: 'search', component: () => import('./editor/NoteSearchView.vue'),
+            props: true },
+          { path: '/kb/:libraryId/content-trash', name: 'content-trash', component: trash,
+            props: route => ({ scope: 'CONTENT', libraryId: route.params.libraryId }) },
+          { path: '/library-trash', name: 'library-trash', component: trash, props: { scope: 'LIBRARY' } },
         ],
       },
       { path: '/:pathMatch(.*)*', redirect: '/app' },
