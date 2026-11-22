@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${KH_DB_URL:jdbc:postgresql://localhost:5432/knowledgehub}
+    username: ${KH_DB_USERNAME:knowledgehub}
+    password: ${KH_DB_PASSWORD:}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
