@@ -143,7 +143,9 @@ class ImageLifecycleTest extends ApiTestSupport {
 
     @Test
     void uploadRacingLibraryTrashCannotPublishImage() throws Exception {
-        var owner = registerAndLogin(uniqueUsername());
+        String username = uniqueUsername();
+        var owner = registerAndLogin(username);
+        var trashActor = actor(username, TEST_PASSWORD);
         String library = library(owner, "上传竞争");
         var pause = new Pause();
         blobs.block = pause;
@@ -151,7 +153,7 @@ class ImageLifecycleTest extends ApiTestSupport {
             var pending = threads.submit(() -> image(owner, library, "image/png", PNG));
             try {
                 assertTrue(pause.written.await(10, TimeUnit.SECONDS));
-                jdbc.update("update libraries set trashed_at = now() where id = ?", id(library));
+                assertEquals(204, call(trashActor, "DELETE", library, null).status());
             } finally {
                 pause.resume.countDown();
             }
