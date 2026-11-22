@@ -5,6 +5,7 @@ import com.knowledgehub.common.Page;
 import com.knowledgehub.library.FolderRepository;
 import com.knowledgehub.library.LibraryAccess;
 import com.knowledgehub.library.LibraryService;
+import com.knowledgehub.media.MarkdownImageReferences;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -18,11 +19,14 @@ public class NoteService {
     private final NoteRepository notes;
     private final FolderRepository folders;
     private final LibraryAccess access;
+    private final MarkdownImageReferences references;
 
-    public NoteService(NoteRepository notes, FolderRepository folders, LibraryAccess access) {
+    public NoteService(NoteRepository notes, FolderRepository folders, LibraryAccess access,
+                       MarkdownImageReferences references) {
         this.notes = notes;
         this.folders = folders;
         this.access = access;
+        this.references = references;
     }
 
     public record NoteView(UUID id, UUID folderId, String title, String markdown, long version, Instant updatedAt) {}
@@ -52,14 +56,18 @@ public class NoteService {
         var imported = MarkdownImport.decode(filename, bytes);
         access.lockActive(accountId, libraryId);
         folders.requireActive(libraryId, folderId);
-        return notes.insert(libraryId, folderId, imported.title(), imported.markdown());
+        var note = notes.insert(libraryId, folderId, imported.title(), imported.markdown());
+        references.replace(libraryId, note.id(), imported.markdown());
+        return note;
     }
 
     @Transactional
     public NoteView save(UUID accountId, UUID libraryId, UUID noteId, long version, String title, String markdown) {
         access.lockActive(accountId, libraryId);
         requireVersion(notes.require(libraryId, noteId, true), version);
-        return notes.save(libraryId, noteId, LibraryService.requiredName(title), requireMarkdown(markdown));
+        var updated = notes.save(libraryId, noteId, LibraryService.requiredName(title), requireMarkdown(markdown));
+        references.replace(libraryId, noteId, markdown);
+        return updated;
     }
 
     @Transactional

@@ -3,8 +3,8 @@ spring:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 3MB
+      max-file-size: 10485760B
+      max-request-size: 12582912B
   datasource:
     url: ${KH_DB_URL:jdbc:postgresql://localhost:5432/knowledgehub}
     username: ${KH_DB_USERNAME:knowledgehub}
