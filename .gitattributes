@@ -1,0 +1,2 @@
+/ops/fastdfs/*.sh text eol=lf
+/ops/fastdfs/versions.env text eol=lf
