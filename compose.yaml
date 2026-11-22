@@ -1,0 +1,117 @@
+x-fastdfs-image: &fastdfs-image
+  build: ./ops/fastdfs
+  image: knowledgehub-fastdfs:6.15.5
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      KH_WEB_MODE: ${KH_WEB_MODE:-http}
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates/${KH_WEB_MODE:-http}
+      NGINX_ENVSUBST_FILTER: '^(KH_TLS_CERT_FILE|KH_TLS_KEY_FILE)$'
+      KH_TLS_CERT_FILE: ${KH_TLS_CERT_FILE:-server.crt}
+      KH_TLS_KEY_FILE: ${KH_TLS_KEY_FILE:-server.key}
+    ports:
+      - target: 8080
+        published: "${KH_WEB_PORT:-8080}"
+        host_ip: ${KH_WEB_BIND:-127.0.0.1}
+    volumes:
+      - type: bind
+        source: ${KH_TLS_DIR:-./ops/nginx}
+        target: /etc/knowledgehub/tls
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [web]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", 'wget -q --no-check-certificate -O /dev/null "$${KH_WEB_MODE}://127.0.0.1:8080/"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      KH_DB_URL: jdbc:postgresql://db:5432/${KH_DB_NAME:-knowledgehub}
+      KH_DB_USERNAME: ${KH_DB_USERNAME:-knowledgehub}
+      KH_DB_PASSWORD: ${KH_DB_PASSWORD:?Set KH_DB_PASSWORD}
+      KH_ADMIN_USERNAME: ${KH_ADMIN_USERNAME:-admin}
+      KH_ADMIN_PASSWORD: ${KH_ADMIN_PASSWORD:?Set KH_ADMIN_PASSWORD}
+      KH_FDFS_TRACKER: tracker:22122
+      KH_SESSION_SECURE: ${KH_SESSION_SECURE:-false}
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+    networks: [web, database, fastdfs]
+    depends_on:
+      db:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/actuator/health"]
+      interval: 5s
+      timeout: 4s
+      retries: 24
+    stop_grace_period: 35s
+
+  db:
+    image: postgres:17.12
+    environment:
+      POSTGRES_DB: ${KH_DB_NAME:-knowledgehub}
+      POSTGRES_USER: ${KH_DB_USERNAME:-knowledgehub}
+      POSTGRES_PASSWORD: ${KH_DB_PASSWORD:?Set KH_DB_PASSWORD}
+    networks: [database]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  tracker:
+    <<: *fastdfs-image
+    command: tracker
+    networks: [fastdfs]
+    volumes:
+      - tracker-data:/data/tracker
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22122"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  storage:
+    <<: *fastdfs-image
+    command: storage
+    networks: [fastdfs]
+    depends_on:
+      tracker:
+        condition: service_healthy
+    volumes:
+      - storage-data:/data/storage
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - printf 'base_path = /tmp\ntracker_server = tracker:22122\n' > /tmp/probe.conf && fdfs_monitor /tmp/probe.conf | grep -q 'ACTIVE'
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+networks:
+  web:
+  database:
+    internal: true
+  fastdfs:
+    internal: true
+
+volumes:
+  pg-data:
+  tracker-data:
+  storage-data:

@@ -10,3 +10,6 @@
 *.log
 .idea/
 .vscode/
+/frontend/e2e/.state/
+/backups/
+/tls/
